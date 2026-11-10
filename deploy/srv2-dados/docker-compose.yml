@@ -1,0 +1,52 @@
+# SRV-2 — Dados: ragdb (PostgreSQL 16 + pgvector) e auditdb
+# Em produção, preferir instalação nativa (pacotes PGDG + pgvector) gerida
+# pela equipe DBA, com pgBackRest e Patroni. Contêiner aqui = protótipo.
+name: rag-dba-data
+
+services:
+  ragdb:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: rag_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/rag_owner   # conteúdo = rag_owner.vault
+      POSTGRES_DB: ragdb
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+      - -c
+      - maintenance_work_mem=2GB      # construção de índices HNSW
+    volumes:
+      - ragdb-data:/var/lib/postgresql/data
+      # 01–03 rodam em ragdb; 04_audit.sql deve rodar na instância/base auditdb
+      - ../../sql/01_schema_core.sql:/docker-entrypoint-initdb.d/01_schema_core.sql:ro
+      - ../../sql/02_vector.sql:/docker-entrypoint-initdb.d/02_vector.sql:ro
+      - ../../sql/03_rls_roles.sql:/docker-entrypoint-initdb.d/03_rls_roles.sql:ro
+      - ./certs:/certs:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    secrets: [rag_owner]
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME_FILE: /run/secrets/exporter_dsn  # monitor.vault
+
+secrets:
+  rag_owner:
+    file: ./secrets/rag_owner   # gerado a partir do Vault, fora do Git
+
+volumes:
+  ragdb-data: {}
+
+# Observação: auditdb deve rodar em instância separada (outro cluster/porta)
+# ou, no mínimo, base separada com papéis distintos — ver sql/04_audit.sql.

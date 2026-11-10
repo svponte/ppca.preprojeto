@@ -1,0 +1,133 @@
+# SRV-1 — Aplicação (borda, identidade, serviços, Git, segredos, observabilidade)
+# Esqueleto de referência para o ambiente de pesquisa. Senhas NUNCA neste arquivo:
+# segredos vêm do Vault (agente Vault / AppRole) ou de Docker secrets gerados a
+# partir dele. Referências no formato <usuario>.vault (ex.: keycloak_db.vault).
+name: rag-dba-app
+
+networks:
+  edge:        {}                      # Traefik ↔ UI/API
+  internal:    { internal: true }      # serviços entre si (sem saída)
+  egress:      {}                      # SOMENTE ext-search-gateway → proxy de saída
+
+x-app-defaults: &app
+  restart: unless-stopped
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  networks: [internal]
+  environment:
+    VAULT_ADDR: https://vault:8200
+    OPA_URL: http://opa:8181/v1/data/rag/authz/decision
+    AUDIT_DSN_REF: audit_writer.vault          # resolvido em runtime
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+services:
+  traefik:
+    image: traefik:v3
+    ports: ["443:443"]
+    networks: [edge]
+    volumes: ["./traefik:/etc/traefik:ro"]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start", "--optimized"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://srv2-dados:5432/keycloak?sslmode=verify-full
+      KC_DB_USERNAME: keycloak_db
+      # KC_DB_PASSWORD: keycloak_db.vault  (injetado pelo agente Vault)
+      KC_HOSTNAME: sso.dba.local
+    networks: [edge, internal]
+
+  vault:
+    image: hashicorp/vault:1.18
+    cap_add: ["IPC_LOCK"]
+    volumes: ["vault-data:/vault/file", "./vault/config.hcl:/vault/config/config.hcl:ro"]
+    command: ["server"]
+    networks: [internal]
+
+  opa:
+    image: openpolicyagent/opa:latest-static
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
+    volumes: ["../../policies/opa:/policies:ro"]
+    networks: [internal]
+
+  gitea:
+    image: gitea/gitea:1.22
+    volumes: ["gitea-data:/data"]
+    networks: [edge, internal]
+
+  web-ui:
+    <<: *app
+    build: ../../services/web-ui
+    networks: [edge, internal]
+
+  api-gateway:
+    <<: *app
+    build: ../../services/api-gateway
+    networks: [edge, internal]
+
+  agent-service:
+    <<: *app
+    build: ../../services/agent-service
+    environment:
+      LLM_GATEWAY_URL: https://srv3-inferencia:8443
+      CHECKPOINT_DSN_REF: rag_agent.vault
+
+  retrieval-service:
+    <<: *app
+    build: ../../services/retrieval-service
+    environment:
+      RAG_DSN_REF: rag_retrieval.vault
+
+  tool-service:
+    <<: *app
+    build: ../../services/tool-service
+    # única rota para os bancos alvo (regra de firewall por IP deste contêiner/host)
+
+  ext-search-gateway:
+    <<: *app
+    build: ../../services/ext-search-gateway
+    networks: [internal, egress]
+    environment:
+      HTTPS_PROXY: http://proxy-saida.dba.local:3128
+      ANON_DSN_REF: rag_anonymizer.vault
+
+  searxng:
+    image: searxng/searxng:latest
+    networks: [internal, egress]
+    environment:
+      HTTPS_PROXY: http://proxy-saida.dba.local:3128
+
+  ingestion-worker:
+    <<: *app
+    build: ../../services/ingestion-worker
+    environment:
+      RAG_DSN_REF: rag_ingestion.vault
+      GIT_URL: http://gitea:3000/dba/conhecimento.git
+
+  knowledge-writer:
+    <<: *app
+    build: ../../services/knowledge-writer
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes: ["./prometheus:/etc/prometheus:ro", "prom-data:/prometheus"]
+    networks: [internal]
+
+  grafana:
+    image: grafana/grafana:latest
+    networks: [edge, internal]
+
+  loki:
+    image: grafana/loki:latest
+    networks: [internal]
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    networks: [edge, internal]
+
+volumes:
+  vault-data: {}
+  gitea-data: {}
+  prom-data: {}

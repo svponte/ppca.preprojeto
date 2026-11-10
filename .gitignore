@@ -1,0 +1,13 @@
+# segredos e estado local
+.env
+*.env
+deploy/**/secrets/
+deploy/**/certs/
+*.pem
+*.key
+# Python
+__pycache__/
+.venv/
+# editores
+.vscode/*
+!.vscode/extensions.json

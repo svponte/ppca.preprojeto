@@ -1,0 +1,40 @@
+# SRV-3 — Inferência (GPU). SEM rota para a Internet.
+# Modelos são importados por processo controlado (download em estação de
+# staging, verificação de hash, cópia para o volume) — ver docs/09.
+name: rag-dba-inference
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 127.0.0.1:11434     # só o llm-gateway local acessa
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_NUM_PARALLEL: "4"
+      OLLAMA_MAX_LOADED_MODELS: "3"    # LLM + embedding + reranker
+    volumes: ["ollama-models:/root/.ollama"]
+    network_mode: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  llm-gateway:
+    build: ../../services/llm-gateway
+    network_mode: host                 # escuta 8443 (mTLS) — único ponto exposto
+    environment:
+      OLLAMA_URL: http://127.0.0.1:11434
+      TLS_CERT_REF: pki/llm-gateway   # emitido pelo Vault PKI
+
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:latest
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+volumes:
+  ollama-models: {}
