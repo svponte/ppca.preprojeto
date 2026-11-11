@@ -1,6 +1,7 @@
 # 06 — Segurança
 
 > Requisito central: **a IA nunca poderá revelar informações além das permissões do usuário autenticado.**
+> Escopo: os servidores da STI e o LMISup estão no mesmo domínio institucional, sem acesso externo. Os controles de confidencialidade deste documento tratam do **uso do sistema pelos usuários** (o que cada um pode ver, perguntar e aprovar) e dos canais que saem do domínio (pesquisa externa — doc 07; assistentes de código com modelo externo — ADR-007), não do processamento interno — geração do modelo, ingestão, inferência (ADR-018).
 > Estratégia: defesa em profundidade — a permissão é verificada na borda (OPA), aplicada no dado (RLS) e reverificada na saída (DLP). Nenhuma camada isolada é suficiente, porque o LLM é suscetível a *prompt injection*.
 
 ## 6.1 Modelo de ameaças (STRIDE + OWASP Top 10 para LLM)

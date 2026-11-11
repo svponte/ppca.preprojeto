@@ -11,7 +11,7 @@ A proposta se insere em **AIOps** (*Artificial Intelligence for IT Operations*) 
 1. **Base de conhecimento assistida** para os analistas: perguntas respondidas com o estado atual dos ambientes (consulta ao vivo por ferramentas somente leitura) e com o conhecimento documentado da equipe (RAG sobre procedimentos, runbooks e incidentes).
 2. **Operação orientada a eventos**: eventos do Zabbix e do pipeline de logs são triados por um modelo pequeno e tratados por runbooks com **autonomia graduada** (informar → agir sozinho em ação reversível → agir com aprovação humana → nunca automatizar).
 
-Terminologia: o modelo usado é um **LLM de pesos abertos auto-hospedado em infraestrutura institucional** — não um modelo "fechado" (termo que na literatura designa modelos proprietários). A operação roda na STI; o LMISup/UnB é usado para avaliação e, se necessário, ajuste fino (ADR-010).
+Terminologia: o modelo usado é um **LLM de pesos abertos auto-hospedado em infraestrutura institucional** — não um modelo "fechado" (termo que na literatura designa modelos proprietários). A plataforma atende a STI e usa dois sítios de inferência: o SRV-3 da STI, que mantém o caminho crítico e o modelo de contingência, e o LMISup/UnB, para o modelo maior, a avaliação e o ajuste fino. Como o laboratório está sujeito a contenção sem aviso, a plataforma degrada automaticamente para a STI (ADR-017).
 
 **Núcleo e extensão**: o núcleo da pesquisa é a consulta segura ao contexto (RAG + ferramentas) e a triagem de eventos no nível 0 (informar). As ações automáticas (níveis 1 e 2) são a extensão, liberadas por evidência medida.
 
@@ -39,6 +39,7 @@ Palavras-chave: AIOps; LLM de pesos abertos; RAG; agentes com ferramentas; admin
 ppca.preprojeto/
 ├── README.md                         ← este arquivo
 ├── CLAUDE.md / AGENTS.md             ← instruções para Claude Code e Codex
+├── TODO.md                           ← tarefas da seleção (Edital PPCA nº 05/2026)
 ├── docs/
 │   ├── 01-arquitetura.md             ← arquitetura completa e microsserviços
 │   ├── 02-diagramas.md               ← diagramas (Mermaid) de componentes e implantação

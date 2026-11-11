@@ -13,7 +13,7 @@ Abordagem incremental: cada fase entrega valor utilizável e gera dados para a p
 | Banco | ragdb/auditdb com `sql/01–04` |
 | Observabilidade | Prometheus, Grafana, Loki, agente Wazuh |
 | Governança | RIPD (LGPD) iniciado; submissão ao CEP do protocolo de avaliação |
-| LMISup | Contato com o laboratório (lmisup@unb.br): condições de acesso, modalidade (filas em lote ou serviço de inferência), política de dados, saída dos pesos derivados para a STI (ADR-010) |
+| LMISup | Reserva de cota para os ciclos de geração do modelo (lote, com *checkpoint*); procedimento de transferência dos pesos para o SRV-3 (ADR-018) |
 
 ## Fase 1 — Base de conhecimento e RAG somente leitura (meses 3–5)
 
@@ -31,7 +31,8 @@ Abordagem incremental: cada fase entrega valor utilizável e gera dados para a p
 - OPA para ferramentas; credenciais dinâmicas por alvo — **começando por DEV/HML**, PROD após 4 semanas sem incidentes.
 - Servidor MCP para VS Code (Claude Code / Codex) com teto INTERNO; CLI `dbai` para os *jump hosts*.
 - **AIOps nível 0**: `event-orchestrator` com *webhook* do Zabbix e `log-processor` (doc 14) — triagem e resumo, sem ações; medir acerto da triagem.
-- Primeira rodada de avaliação de modelos no LMISup.
+- Primeiro ciclo de geração do modelo no LMISup (seleção, avaliação, adequação ao porte).
+- **Dimensionamento do SRV-3** a partir dos modelos escolhidos; alocação ou aquisição da GPU de produção.
 
 ## Fase 3 — Pesquisa externa e aprendizado contínuo (meses 9–11)
 
@@ -53,8 +54,9 @@ Abordagem incremental: cada fase entrega valor utilizável e gera dados para a p
 
 | Risco | Prob. | Impacto | Mitigação |
 |-------|-------|---------|-----------|
-| GPU insuficiente para modelo de qualidade | Média | Alto | Avaliar no LMISup modelos de vários portes e escolher o que cabe na GPU da STI; modelos menores quantizados; priorizar recuperação de qualidade e ferramentas; solicitar GPU com antecedência |
-| LMISup indisponível ou com política de dados incompatível | Média | Médio | A operação não depende do laboratório (ADR-010); avaliação com dados sintéticos/anonimizados; alternativa: avaliar só modelos que cabem no SRV-3 |
+| GPU insuficiente para modelo de qualidade | Média | Alto | Gerar no LMISup e dimensionar o SRV-3 pelo modelo escolhido; se o servidor disponível for menor, destilar/quantizar no LMISup; modelos menores quantizados; priorizar recuperação de qualidade e ferramentas; solicitar GPU com antecedência |
+| Contenção do LMISup durante um ciclo de geração | Alta | Baixo | Trabalhos em lote com *checkpoint*, retomados depois; a produção segue com o modelo vigente no SRV-3 (ADR-018) |
+| Atraso no dimensionamento/aquisição do SRV-3 | Média | Alto | Começar com o modelo que cabe na GPU disponível; trocar após o ciclo de geração seguinte |
 | Ação automática indevida | Baixa | Muito alto | Nível 2 com aprovação em PROD, nível 3 nunca automatizado, verificação pós-ação, disjuntor, *kill switch*, implantação gradual (doc 13) |
 | Volume de logs maior que o previsto | Média | Médio | Limites conservadores de log, amostragem de padrões conhecidos, só anômalos chegam ao LLM (doc 14) |
 | Documentação atual desatualizada / incompleta | Alta | Alto | Fase 1 inclui saneamento; métrica de "lacunas" orienta esforço |

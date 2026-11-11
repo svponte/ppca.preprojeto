@@ -6,7 +6,7 @@ Escopo do doutorado: arquitetura descrita nos docs 01–14, 3 servidores, uma eq
 
 - **Núcleo**: consulta segura ao contexto (RAG + ferramentas ao vivo) e AIOps nível 0 (triagem de eventos do Zabbix e do pipeline de logs).
 - **Extensão**: AIOps nível 1 em DEV/HML e nível 2 em PROD com aprovação (doc 13).
-- Avaliação de modelos no LMISup; operação na STI (ADR-010).
+- Modelo gerado no LMISup a qualquer tempo; produção em servidor de inferência da STI dimensionado para ele (ADR-018).
 
 ## Horizonte 2 — Produção institucional (18–36 meses)
 
@@ -29,7 +29,7 @@ Escopo do doutorado: arquitetura descrita nos docs 01–14, 3 servidores, uma eq
 | Ações assistidas | Além do catálogo de runbooks (doc 13), agente propõe *plano de ação* executável (ex.: `CREATE INDEX CONCURRENTLY` em HML), executado via pipeline com aprovação (*change management*), nunca diretamente |
 | Promoção de autonomia | Ações de nível 2 com histórico consistente promovidas a nível 1 também em PROD, por MR revisado (doc 13 §13.8) |
 | Diagnóstico proativo | Detecção de anomalias em métricas + correlação com incidentes passados antes do alerta |
-| *Fine-tuning* / adaptação | LoRA em modelo de pesos abertos, no LMISup, com dados **sintéticos e anonimizados**, restrito a vocabulário, estilo e formato — somente se a avaliação mostrar lacuna (ADR-011); pode ser antecipado para o horizonte 1 se a lacuna aparecer cedo |
+| *Fine-tuning* / adaptação | LoRA em modelo de pesos abertos, no LMISup, com dados internos, restrito a vocabulário, estilo e formato — somente se a avaliação mostrar lacuna (ADR-011); pode ser antecipado para o horizonte 1 se a lacuna aparecer cedo |
 | Multiagente | Agentes especializados (PostgreSQL, SQL Server, segurança, capacidade) coordenados |
 | Database DevOps | Revisão automática de *migrations* (*lint* de DDL, impacto em *locks*) integrada aos MRs dos sistemas |
 | Padrões abertos | MCP como interface padrão para todas as ferramentas; interoperabilidade com assistentes de código da equipe |
@@ -43,4 +43,5 @@ Escopo do doutorado: arquitetura descrita nos docs 01–14, 3 servidores, uma eq
 | LangGraph | Biblioteca deixar de ser mantida ou surgir padrão de orquestração superior; isolar via interfaces |
 | Teto INTERNO no MCP | Disponibilidade de assistente de código executando com modelo local |
 | Fila em tabela (`ops.event_queue`) | Atraso de consumo P95 > 30 s ou contenção de *locks* na fila |
-| Uso do LMISup | Mudança nas condições de acesso ou política de dados do laboratório |
+| Modelo em produção | Novo modelo base relevante, novos dados ou queda de qualidade no *golden set* → novo ciclo de geração no LMISup |
+| SRV-3 | GPU/VRAM sustentada > 85% ou latência fora da meta → redimensionar ou gerar modelo menor |

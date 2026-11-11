@@ -5,7 +5,7 @@
 | # | Princípio | Justificativa |
 |---|-----------|---------------|
 | P1 | **Conhecimento interno primeiro (internal-first)** | A documentação da organização é a fonte de verdade; o LLM é um mecanismo de raciocínio, não de memória. Reduz alucinação e mantém respostas aderentes às políticas da equipe. |
-| P2 | **Dados sensíveis nunca saem do perímetro** | LLM de pesos abertos auto-hospedado (Ollama) e embeddings locais. A única saída para a Internet é a pesquisa externa, que passa obrigatoriamente pelo *gateway* de anonimização + DLP. Para o LMISup/UnB (avaliação) vão apenas dados sintéticos ou anonimizados (ADR-010). |
+| P2 | **Dados sensíveis nunca saem do perímetro** | LLM de pesos abertos auto-hospedado (Ollama) e embeddings locais. A única saída para a Internet é a pesquisa externa, que passa obrigatoriamente pelo *gateway* de anonimização + DLP. O LMISup/UnB, onde o modelo é gerado, está dentro da STI e também sem acesso externo (ADR-018). |
 | P3 | **Autorização no dado, não na interface** | O filtro de permissão é aplicado no banco (Row-Level Security) **antes** da recuperação. O LLM nunca vê um *chunk* que o usuário não poderia ler (defesa contra *prompt injection* e vazamento por contexto). |
 | P4 | **Zero Trust** | Toda chamada entre serviços é autenticada (mTLS + JWT), autorizada (OPA) e auditada. Nenhuma confiança implícita por estar "na rede interna". |
 | P5 | **Git como fonte canônica do conhecimento** | Markdown versionado = rastreabilidade, revisão por pares (*merge request*), *rollback* e compatibilidade com o fluxo atual da equipe (VS Code, Claude Code, Codex). O índice vetorial é **derivado** e reconstruível. |
@@ -82,14 +82,14 @@ Para o protótipo (3 servidores), os serviços rodam como contêineres Docker Co
 |----------|-------|-------------|--------------------|
 | **SRV-1 — Aplicação** | Borda, identidade, aplicação, Git | Traefik, Keycloak, web-ui, api-gateway, agent-service, retrieval-service, tool-service, ext-search-gateway, ingestion-worker, knowledge-writer, OPA (sidecar), Gitea, Vault, Prometheus, Grafana, agente Wazuh | 8–16 vCPU, 32 GB RAM, 200 GB SSD |
 | **SRV-2 — Dados** | Persistência | PostgreSQL 16 + pgvector (base `ragdb`), base `auditdb` (instância ou *cluster* separado, papéis distintos), pgBackRest, postgres_exporter | 8 vCPU, 32–64 GB RAM, 500 GB SSD NVMe |
-| **SRV-3 — Inferência** | GPU | Ollama (modelo pequeno de triagem, modelo maior de interação, embeddings, reranker), llm-gateway, nvidia/dcgm-exporter | GPU ≥ 24 GB VRAM (ideal 48 GB), 16 vCPU, 64 GB RAM — dimensionamento final conforme os modelos escolhidos na avaliação (ADR-011) |
-| **LMISup/UnB** (externo à STI) | Avaliação e ajuste fino condicional | Execução do *golden set*, comparação de modelos de porte maior, ajuste fino se necessário — só com dados sintéticos/anonimizados | Cluster de GPUs do laboratório; condições de acesso a confirmar (ADR-010) |
+| **SRV-3 — Inferência** | GPU | Ollama (modelo pequeno de triagem, modelo maior de interação, embeddings, reranker), llm-gateway, nvidia/dcgm-exporter | Dimensionado para os modelos gerados no LMISup (ADR-018); referência inicial: GPU ≥ 24 GB VRAM (ideal 48 GB), 16 vCPU, 64 GB RAM |
+| **LMISup/UnB** (dentro da STI, compartilhado) | Geração do modelo — fora do caminho de produção | Seleção e avaliação de modelos, *golden set*, ajuste fino quando indicado, destilação/quantização para o porte do SRV-3; trabalhos em lote com *checkpoint* | Cluster de GPUs do laboratório, sujeito a contenção (ADR-018) |
 
 **Observações**
 - Keycloak e Vault no SRV-1 são aceitáveis para pesquisa; em produção vão para nós dedicados (ver doc 09, fase 4).
 - A base de auditoria fica no SRV-2, mas em **banco separado, com papel de escrita *append-only*** e replicação para o Wazuh — o serviço de aplicação não consegue apagar ou alterar eventos.
 - O SRV-3 **não tem rota de saída para a Internet**. Modelos são baixados uma vez por um processo controlado e verificados por *hash*.
-- A operação **não depende do LMISup**: pesos avaliados ou ajustados lá são importados pelo mesmo processo controlado e servidos no SRV-3.
+- A produção **não depende do LMISup**: os pesos gerados lá são importados pelo mesmo processo controlado (verificação de *hash*) e servidos no SRV-3; contenção do laboratório só atrasa o próximo ciclo de geração.
 
 ## 5. Fluxo de uma consulta (resumo)
 

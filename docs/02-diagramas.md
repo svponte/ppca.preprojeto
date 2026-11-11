@@ -48,7 +48,7 @@ flowchart LR
     end
 
     WAZ[Wazuh SIEM]
-    LMIS[LMISup/UnB<br/>avaliação — dados<br/>sintéticos/anonimizados]
+    LMIS[LMISup/UnB<br/>geração e avaliação<br/>do modelo]
     TEAMS[Teams<br/>notificação / aprovação]
     AD[(Active Directory<br/>LDAP)]
     WEB((Internet<br/>fontes permitidas))
@@ -78,7 +78,7 @@ flowchart LR
     ORQ -- ação autorizada --> EXE
     EXE -- aiops_executor.vault --> TPG & TSQL
     ORQ & EXE --> AUD
-    OLL -. pesos avaliados .- LMIS
+    LMIS -. pesos gerados<br/>importação controlada .-> OLL
     AUD --> WAZ
     SRV1 -. métricas .-> MON
 ```
@@ -124,7 +124,7 @@ Regras de *firewall* resumidas:
 | SRV-1 (`action-executor`) | Bancos alvo / agentes de monitoramento | 5432 / 1433 / 10050 | Somente a partir do IP do executor; credencial `aiops_executor.vault` |
 | Servidores PostgreSQL (Fluent Bit) | SRV-1 (`log-processor`) | 24224 (TLS) | Envio de logs |
 | SRV-1 (`log-processor`) | Zabbix server | 10051 | `zabbix_sender` (itens *trapper*) |
-| Estação de *staging* | LMISup/UnB | conforme o laboratório | Somente dados sintéticos/anonimizados e pesos; nenhum acesso do LMISup à rede de produção |
+| Estação de *staging* | LMISup/UnB | conforme o laboratório | Dados de treino/avaliação e pesos gerados; o LMISup não acessa a rede de produção e não serve inferência à plataforma |
 | SRV-3 | Internet | — | **Bloqueado** |
 
 ## 2.3 Fluxo de dados da ingestão

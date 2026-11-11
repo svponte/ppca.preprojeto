@@ -4,7 +4,7 @@
 
 "Aprender" **não** significa re-treinar o modelo. Significa **ampliar e corrigir a base de conhecimento** de forma revisada e versionada. Vantagens: auditável, reversível (Git), sem custo de GPU para *fine-tuning*, sem risco de o modelo "memorizar" dados sensíveis.
 
-O ajuste fino, quando houver (ADR-011), é separado deste ciclo: é condicional a uma lacuna medida, restrito a vocabulário, estilo e formato, feito no LMISup com dados sintéticos ou anonimizados — nunca com fatos da infraestrutura.
+O ajuste fino, quando houver (ADR-011), é separado deste ciclo: é condicional a uma lacuna medida, restrito a vocabulário, estilo e formato, feito no LMISup com dados internos (ADR-018) — nunca para ensinar fatos da infraestrutura, que ficariam nos pesos sem controle de acesso.
 
 ## 8.2 Ciclo
 

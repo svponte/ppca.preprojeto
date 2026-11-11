@@ -5,7 +5,7 @@ Formato: contexto → decisão → consequências. Novas decisões são acrescen
 ---
 
 ## ADR-001 — Inferência 100% local (Ollama)
-**Status**: Aceita (complementada por ADR-010)
+**Status**: Aceita (complementada por ADR-018)
 **Contexto**: Documentação contém topologia, IPs e configurações; requisito de que nenhuma informação confidencial saia da organização; LGPD.
 **Decisão**: LLM, embeddings e reranker executam localmente no SRV-3, sem rota para a Internet. Ollama no protótipo; LLM gateway abstrai o provedor.
 **Consequências**: (+) soberania dos dados, sem transferência internacional; (−) qualidade limitada pela GPU disponível; necessidade de avaliar modelos abertos (doc 10).
@@ -63,7 +63,7 @@ Formato: contexto → decisão → consequências. Novas decisões são acrescen
 > As ADRs 010–016 registram as decisões da revisão de 2026-11-11 (análise do capítulo 13 de *Competente o Suficiente* e da infraestrutura do LMISup/UnB).
 
 ## ADR-010 — Avaliação no LMISup, operação na STI
-**Status**: Aceita
+**Status**: Substituída por ADR-017 e depois por ADR-018
 **Contexto**: O LMISup/UnB (Laboratório Multiusuário de IA e Supercomputação, com participação da STI) oferece cluster de GPUs de data center. A operação diária, porém, precisa de disponibilidade contínua e de dados que não devem sair do domínio de segurança da STI. O laboratório ainda não publicou políticas de uso, de dados nem de acesso.
 **Decisão**: O LMISup é usado para **avaliação** (comparação de modelos, execução do *golden set*, experimentos de ablação) e, **somente se necessário**, para ajuste fino (ADR-011). A operação roda no SRV-3 da STI. Para o LMISup vão apenas dados sintéticos ou anonimizados; metadados reais de produção não saem da STI.
 **Consequências**: (+) a solução não depende do laboratório para funcionar; experimentos com modelos grandes ficam viáveis sem GPU própria; (−) é preciso confirmar com o LMISup (lmisup@unb.br) as condições de acesso, a modalidade de uso (filas em lote ou serviço de inferência) e a liberdade de levar os pesos derivados para a STI; riscos registrados no doc 09.
@@ -72,7 +72,7 @@ Formato: contexto → decisão → consequências. Novas decisões são acrescen
 **Status**: Aceita
 **Contexto**: A triagem de eventos é uma tarefa pequena e fechada; a interação com o analista exige raciocínio e chamada de ferramentas. Modelos menores custam menos memória de GPU, mas têm limites em fluxos longos. Fatos da infraestrutura mudam todos os dias e são sensíveis.
 **Decisão**: (1) dois níveis de modelo: um **pequeno** para classificação e triagem de eventos e um **maior** para conversa, planejamento e síntese; (2) os tamanhos não são premissa: saem da avaliação (doc 10) e cabem na GPU da STI; (3) o modelo de partida é um modelo de pesos abertos sem ajuste; o **ajuste fino é opcional**, feito só se a avaliação mostrar lacuna, e restrito a vocabulário de DBA em português, estilo e formato de saída (incluindo chamadas de ferramenta); (4) **fatos nunca entram nos pesos**: o estado atual vem de ferramentas (ADR-012) e o conhecimento documental vem do RAG.
-**Consequências**: (+) pesos não viram artefato sensível; nada a retreinar quando o ambiente muda; (−) se a avaliação indicar ajuste fino, surge um ciclo de treino no LMISup com dados sintéticos/anonimizados e uma licença do modelo base compatível com derivados.
+**Consequências**: (+) os pesos não contornam o controle de acesso — o que estivesse nos pesos ficaria visível a qualquer usuário, sem RLS; nada a retreinar quando o ambiente muda; (−) se a avaliação indicar ajuste fino, surge um ciclo de treino no LMISup com dados internos (ADR-018) e uma licença do modelo base compatível com derivados.
 
 ## ADR-012 — Enquadramento AIOps; estado atual por consulta ao vivo, RAG para conhecimento não estruturado
 **Status**: Aceita
@@ -103,4 +103,26 @@ Formato: contexto → decisão → consequências. Novas decisões são acrescen
 **Contexto**: O Zabbix lê arquivos de log (`log[]`, `logrt[]`, `eventlog[]`) apenas linha a linha e por regex: não trata mensagens de várias linhas, não agrupa padrões nem correlaciona. Enviar todas as linhas ao LLM é inviável e arriscado (senhas e dados pessoais nos logs).
 **Decisão**: Coleta com Fluent Bit (ou Vector) nos servidores; fontes estruturadas (`jsonlog` no PostgreSQL 16, `csvlog` no PostgreSQL 14, Extended Events e `sys.xp_readerrorlog` no SQL Server); **mascaramento antes de qualquer armazenamento**; agrupamento em modelos de mensagem (*fingerprint*); regras determinísticas. Só padrões **novos ou anômalos** chegam ao modelo pequeno; métricas por padrão voltam ao Zabbix (`zabbix_sender`), e eventos entram na mesma fila do ADR-013 (doc 14).
 **Consequências**: (+) volume baixo chegando ao LLM; alertas continuam centralizados no Zabbix; (−) componente novo a operar; revisão de `log_statement` e de parâmetros de log nos servidores.
+
+## ADR-017 — Dois sítios de inferência (STI e LMISup) com degradação para a STI
+**Status**: Substituída por ADR-018
+**Contexto**: O projeto é destinado ao atendimento da STI, que participa do LMISup/UnB; considera-se acesso amplo ao laboratório, para avaliação, ajuste fino e inferência. O laboratório, porém, é multiusuário e está sujeito a **contenção intempestiva**: preempção de jobs, manutenção, prioridade de outros projetos ou queda de capacidade sem aviso.
+**Decisão**:
+1. **Dois sítios de inferência**: SRV-3 (STI) e LMISup. O `llm-gateway` da STI é o único ponto de entrada e decide a rota.
+2. **Caminho crítico sempre na STI**: modelo pequeno de triagem, embeddings, reranker e um **modelo de interação de contingência** rodam no SRV-3. A operação orientada a eventos (doc 13, níveis 0 a 2) e a ingestão **nunca dependem do LMISup**.
+3. **LMISup como capacidade preferencial**: modelo maior de interação (rota preferencial quando disponível), avaliação, ajuste fino (ADR-011) e cargas em lote (reindexação em massa, execução do *golden set*).
+4. **Degradação automática**: o `llm-gateway` mantém *health check*, *timeout* e disjuntor para a rota LMISup. Em contenção, as requisições interativas passam para o modelo de contingência local, e a resposta informa que foi gerada em modo de contingência. Cargas em lote ficam em fila e são retomadas a partir de *checkpoints*.
+5. **Dados**: o LMISup é tratado como domínio institucional, mediante acordo formal STI–LMISup (finalidade, retenção nula de prompts e respostas, acesso restrito ao endpoint da plataforma, mTLS). **Teto de classificação CONFIDENCIAL** para contexto enviado ao LMISup; conteúdo RESTRITO (IPs, contas de serviço, procedimentos de segurança) só é processado no SRV-3 (`policies/opa/llm_routing.rego`).
+6. **Mesmos pesos, dois lugares**: modelos avaliados ou ajustados no LMISup são importados para a STI pelo processo controlado (verificação de *hash*), para que a contingência e a rota preferencial tenham comportamento conhecido.
+**Consequências**: (+) qualidade do modelo maior no uso normal sem tornar a operação dependente do laboratório; uso de dados reais na avaliação, dentro do acordo; (−) dois ambientes para operar e monitorar; o modelo de contingência também precisa atingir um mínimo aceitável na avaliação (doc 10); acordo STI–LMISup é pré-requisito.
+
+## ADR-018 — LMISup gera o modelo; produção em servidor dimensionado da STI
+**Status**: Aceita (substitui ADR-010 e ADR-017)
+**Contexto**: O LMISup e os servidores da STI estão no mesmo domínio institucional, sem acesso externo. O LMISup pode ser usado sempre que for preciso gerar um modelo, mas é compartilhado: mesmo disponível, não deve hospedar a operação contínua e está sujeito a contenção sem aviso.
+**Decisão**:
+1. **LMISup = geração do modelo**, a qualquer tempo: seleção e avaliação de modelos de pesos abertos, ajuste fino quando a avaliação indicar (ADR-011), destilação ou quantização para o porte do servidor de produção, e reexecução do *golden set*. Os trabalhos rodam em lote, com *checkpoint*, e podem ser interrompidos e retomados.
+2. **Produção = servidor de inferência da STI (SRV-3)**, dimensionado para os modelos gerados (modelo pequeno de triagem, modelo maior de interação, embeddings, reranker). Não há rota de inferência para o LMISup em produção.
+3. **Ciclo repetível**: um novo modelo base, novos dados ou queda de qualidade disparam novo ciclo no LMISup → avaliação → importação dos pesos para o SRV-3 por processo controlado (verificação de *hash*) → troca no `llm-gateway` após passar no *golden set*.
+4. **Confidencialidade no acesso, não no processamento**: como o processamento ocorre todo dentro da STI, os dados internos podem ser usados sem anonimização na geração e na avaliação do modelo. Os controles de confidencialidade (RLS, OPA, DLP de saída, mascaramento do que o usuário vê, teto INTERNO no MCP — ADR-007, pesquisa externa — ADR-005) tratam do **uso do sistema pelos usuários**.
+**Consequências**: (+) a produção não sofre com a contenção do laboratório; dados reais na avaliação aumentam a validade dos resultados; arquitetura de produção com um só sítio; (−) o SRV-3 precisa ser dimensionado (e, se for o caso, adquirido) depois da escolha do modelo; cada novo modelo exige um ciclo completo de avaliação antes da troca.
 

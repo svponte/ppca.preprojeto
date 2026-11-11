@@ -126,9 +126,9 @@ Exemplos de entradas do catálogo (PostgreSQL / SQL Server):
 | Verificação de fidelidade | Comparação texto↔evidência | Modelo médio ou NLI dedicado |
 | Geração de runbook | Escrita estruturada | Modelo médio |
 
-Famílias candidatas (pesos abertos, executáveis no Ollama): Qwen, Llama, Mistral, Gemma, gpt-oss. As faixas de tamanho são indicativas: a escolha final é **resultado experimental** (doc 10), feita no LMISup com modelos de vários portes, e limitada ao que cabe na GPU da STI (ADR-010, ADR-011).
+Famílias candidatas (pesos abertos, executáveis no Ollama): Qwen, Llama, Mistral, Gemma, gpt-oss. As faixas de tamanho são indicativas: a escolha final é **resultado experimental** (doc 10), gerada no LMISup com modelos de vários portes; o servidor de inferência da STI é dimensionado para os modelos escolhidos (ADR-011, ADR-018).
 
-**Ajuste fino (ADR-011)**: o ponto de partida é o modelo de pesos abertos sem ajuste, com prompts e ferramentas. Só se a avaliação mostrar lacuna, aplica-se ajuste fino (ex.: LoRA) restrito a vocabulário de DBA em português, estilo e formato de saída (incluindo chamadas de ferramenta), com dados sintéticos ou anonimizados. Fatos da infraestrutura nunca entram nos pesos. Verificar antes a licença do modelo base (Apache 2.0/MIT permitem derivados; outras licenças têm condições próprias).
+**Ajuste fino (ADR-011)**: o ponto de partida é o modelo de pesos abertos sem ajuste, com prompts e ferramentas. Só se a avaliação mostrar lacuna, aplica-se ajuste fino (ex.: LoRA) restrito a vocabulário de DBA em português, estilo e formato de saída (incluindo chamadas de ferramenta), com dados internos reais, no LMISup (ADR-018). Fatos da infraestrutura nunca entram nos pesos: além de ficarem desatualizados, ficariam visíveis a qualquer usuário, sem passar pelo RLS. Verificar antes a licença do modelo base (Apache 2.0/MIT permitem derivados; outras licenças têm condições próprias).
 
 ## 5.7 Formato da resposta
 

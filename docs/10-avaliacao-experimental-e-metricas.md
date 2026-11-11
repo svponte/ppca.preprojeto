@@ -13,7 +13,7 @@ Pesquisa de natureza **Design Science Research (DSR)**: o artefato (arquitetura 
 | E3 — Impacto operacional | Estudo de campo quase-experimental | H4 |
 | E4 — Operação orientada a eventos | Avaliação offline (eventos históricos) + implantação gradual auditada | H5 |
 
-**Ambientes**: experimentos offline com modelos de vários portes rodam no **LMISup/UnB**, apenas com dados sintéticos ou anonimizados; a operação e os estudos de campo rodam na infraestrutura da STI (ADR-010). Avaliações com dados reais ocorrem em DEV e HML antes de PROD.
+**Ambientes**: a geração e os experimentos offline com modelos de vários portes rodam no **LMISup/UnB**, com dados internos reais (mesmo domínio institucional); a operação e os estudos de campo rodam no servidor de inferência da STI (ADR-018). Antes de cada troca de modelo em produção, o novo modelo passa pelo *golden set* já no hardware do SRV-3, para medir latência e qualidade no porte real. Avaliações com dados reais ocorrem em DEV e HML antes de PROD.
 
 ## 10.2 E1 — Qualidade das respostas
 

@@ -59,7 +59,7 @@ Não se escreve o *tail* do zero: rotação, controle de *offset*, reinício sem
 
 | Risco | Controle |
 |-------|----------|
-| **Senhas em claro** — com `log_statement = 'ddl'` ou `'all'`, um `ALTER ROLE ... PASSWORD '...'` vai para o log | Mascaramento antes de qualquer armazenamento ou envio ao LLM; revisar `log_statement` nos servidores; regra de bloqueio para padrões de senha |
+| **Senhas em claro** — com `log_statement = 'ddl'` ou `'all'`, um `ALTER ROLE ... PASSWORD '...'` vai para o log | Mascaramento antes do Loki e do LLM, porque ambos alimentam o que os usuários veem (ferramenta `buscar_logs`, resumos de triagem, painel); revisar `log_statement` nos servidores; regra de bloqueio para padrões de senha |
 | **LGPD** — texto das consultas traz valores literais (CPF, nomes, matrículas) | Normalização das consultas (literais → `?`) já na coleta; dicionário `sec.sensitive_entity` aplicado ao restante |
 | ***Prompt injection*** — mensagens de erro e texto de consultas são escritos por terceiros | Saída do LLM restrita a enum e validada pelo código (doc 13); conteúdo de log marcado como dado não confiável |
 | **Volume** | Limites conservadores em `log_min_duration_statement`; amostragem de padrões conhecidos; só o anômalo chega ao modelo |
