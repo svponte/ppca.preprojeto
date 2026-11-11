@@ -1,12 +1,25 @@
-# Plataforma Corporativa de IA para Administração de Bancos de Dados com RAG Seguro
+# LLM Auto-hospedado para AIOps em Administração de Bancos de Dados
 
 > Pré-projeto de doutorado — PPCA/UnB
 > Autor: Samuel
-> Status: rascunho arquitetural v0.1 (2026-11-10)
+> Status: rascunho arquitetural v0.2 (2026-11-11)
+
+## Enquadramento
+
+A proposta se insere em **AIOps** (*Artificial Intelligence for IT Operations*) aplicado à administração de bancos de dados (PostgreSQL e SQL Server). A plataforma tem dois modos de uso sobre a mesma base — mesmas ferramentas, mesmos modelos, mesma auditoria:
+
+1. **Base de conhecimento assistida** para os analistas: perguntas respondidas com o estado atual dos ambientes (consulta ao vivo por ferramentas somente leitura) e com o conhecimento documentado da equipe (RAG sobre procedimentos, runbooks e incidentes).
+2. **Operação orientada a eventos**: eventos do Zabbix e do pipeline de logs são triados por um modelo pequeno e tratados por runbooks com **autonomia graduada** (informar → agir sozinho em ação reversível → agir com aprovação humana → nunca automatizar).
+
+Terminologia: o modelo usado é um **LLM de pesos abertos auto-hospedado em infraestrutura institucional** — não um modelo "fechado" (termo que na literatura designa modelos proprietários). A operação roda na STI; o LMISup/UnB é usado para avaliação e, se necessário, ajuste fino (ADR-010).
+
+**Núcleo e extensão**: o núcleo da pesquisa é a consulta segura ao contexto (RAG + ferramentas) e a triagem de eventos no nível 0 (informar). As ações automáticas (níveis 1 e 2) são a extensão, liberadas por evidência medida.
+
+Palavras-chave: AIOps; LLM de pesos abertos; RAG; agentes com ferramentas; administração de bancos de dados; segurança da informação; LGPD.
 
 ## Questão de pesquisa
 
-**Como projetar uma arquitetura segura baseada em IA Generativa e RAG capaz de apoiar a administração corporativa de bancos de dados, preservando o conhecimento organizacional, protegendo informações sensíveis e reduzindo o tempo de resolução de incidentes?**
+**Como projetar uma arquitetura segura de AIOps, baseada em um LLM de pesos abertos auto-hospedado, capaz de apoiar a administração corporativa de bancos de dados — consultando com segurança o contexto operacional e documental e agindo sobre eventos com autonomia graduada — preservando o conhecimento organizacional, protegendo informações sensíveis e reduzindo o tempo de resolução de incidentes?**
 
 ### Hipóteses de trabalho
 
@@ -16,6 +29,9 @@
 | H2 | A aplicação de autorização no nível do *chunk* (RLS + OPA) impede vazamento entre perfis sem degradar significativamente a qualidade das respostas. | Testes adversariais de vazamento, comparação de qualidade com/sem filtro |
 | H3 | A anonimização em camadas (regras determinísticas + NER + lista de entidades do inventário) permite pesquisa externa sem exposição de identificadores internos. | Taxa de vazamento em corpus sintético rotulado |
 | H4 | O ciclo de aprendizado contínuo (incidente → runbook → Git → índice) reduz o MTTR de incidentes recorrentes. | Estudo antes/depois em incidentes reais e simulados |
+| H5 | A triagem de eventos por modelo local pequeno, combinada com autonomia graduada (catálogo de runbooks, executor isolado, verificação pós-ação), reduz o tempo de resposta a eventos recorrentes sem ações indevidas. | Auditoria das triagens e execuções (doc 13), em DEV/HML antes de PROD |
+
+> **Metodologia**: *Design Science Research*. Os critérios de avaliação (exatidão, segurança, desempenho, custo operacional, aceitação pelos analistas) estão definidos; o protocolo experimental detalhado (conjuntos de teste, métricas exatas, limiares, modelos comparados) é preliminar e será fechado na qualificação (doc 10).
 
 ## Estrutura do repositório
 
@@ -35,9 +51,11 @@ ppca.preprojeto/
 │   ├── 09-plano-de-implantacao.md
 │   ├── 10-avaliacao-experimental-e-metricas.md
 │   ├── 11-roadmap.md
-│   └── 12-decisoes-arquiteturais.md  ← ADRs
+│   ├── 12-decisoes-arquiteturais.md  ← ADRs
+│   ├── 13-aiops-eventos-e-autonomia.md ← orquestrador, níveis de autonomia, executor
+│   └── 14-pipeline-de-logs.md        ← coleta, mascaramento e triagem de logs dos SGBDs
 ├── sql/                              ← DDL de referência (PostgreSQL 16 + pgvector)
-├── policies/opa/                     ← políticas Rego de autorização
+├── policies/opa/                     ← políticas Rego (consulta e ações automáticas)
 ├── deploy/                           ← docker-compose por servidor
 └── templates/                        ← modelos de documento (servidor, runbook, incidente)
 ```
@@ -47,7 +65,8 @@ ppca.preprojeto/
 1. [Arquitetura](docs/01-arquitetura.md) → visão geral e justificativas
 2. [Segurança](docs/06-seguranca.md) → requisito obrigatório; condiciona todo o resto
 3. [Agente](docs/05-agente-inteligente.md) → comportamento dinâmico
-4. [Avaliação](docs/10-avaliacao-experimental-e-metricas.md) → como a pesquisa será validada
+4. [AIOps: eventos e autonomia](docs/13-aiops-eventos-e-autonomia.md) → operação orientada a eventos
+5. [Avaliação](docs/10-avaliacao-experimental-e-metricas.md) → como a pesquisa será validada
 
 ## Convenções
 

@@ -5,13 +5,15 @@
 | # | Princípio | Justificativa |
 |---|-----------|---------------|
 | P1 | **Conhecimento interno primeiro (internal-first)** | A documentação da organização é a fonte de verdade; o LLM é um mecanismo de raciocínio, não de memória. Reduz alucinação e mantém respostas aderentes às políticas da equipe. |
-| P2 | **Dados sensíveis nunca saem do perímetro** | LLM local (Ollama) e embeddings locais. A única saída é a pesquisa externa, que passa obrigatoriamente pelo *gateway* de anonimização + DLP. |
+| P2 | **Dados sensíveis nunca saem do perímetro** | LLM de pesos abertos auto-hospedado (Ollama) e embeddings locais. A única saída para a Internet é a pesquisa externa, que passa obrigatoriamente pelo *gateway* de anonimização + DLP. Para o LMISup/UnB (avaliação) vão apenas dados sintéticos ou anonimizados (ADR-010). |
 | P3 | **Autorização no dado, não na interface** | O filtro de permissão é aplicado no banco (Row-Level Security) **antes** da recuperação. O LLM nunca vê um *chunk* que o usuário não poderia ler (defesa contra *prompt injection* e vazamento por contexto). |
 | P4 | **Zero Trust** | Toda chamada entre serviços é autenticada (mTLS + JWT), autorizada (OPA) e auditada. Nenhuma confiança implícita por estar "na rede interna". |
 | P5 | **Git como fonte canônica do conhecimento** | Markdown versionado = rastreabilidade, revisão por pares (*merge request*), *rollback* e compatibilidade com o fluxo atual da equipe (VS Code, Claude Code, Codex). O índice vetorial é **derivado** e reconstruível. |
-| P6 | **Ferramentas somente leitura por padrão** | O agente pode consultar catálogos, métricas e logs; nunca executa DDL/DML. Ações de escrita ficam fora do escopo da IA (humano no circuito). |
+| P6 | **Escrita só por caminho controlado** | O assistente consulta catálogos, métricas e logs e nunca executa DDL/DML. Ações operacionais ocorrem apenas pelo `action-executor`, a partir de runbooks do catálogo com nível de autonomia (0 a 3); DDL, *failover*, permissões e senhas são nível 3 — nunca automatizados (doc 13, ADR-014). |
 | P7 | **Observabilidade e auditabilidade completas** | Cada resposta é reproduzível: pergunta, *chunks* recuperados (com versão/commit), ferramentas chamadas, modelo e versão, latência. |
 | P8 | **Componentes substituíveis** | LLM, modelo de embedding, *vector store* e orquestrador ficam atrás de interfaces. Permite evolução tecnológica sem reescrita (ver roadmap). |
+| P9 | **Estado atual ao vivo; documentação pelo RAG** | Permissões, tamanhos, jobs, parâmetros vigentes e alertas vêm de consulta ao vivo pelas ferramentas do catálogo (somente leitura). O RAG cobre o conhecimento não estruturado: procedimentos, runbooks, políticas e incidentes (ADR-012). |
+| P10 | **O LLM no meio, não nas pontas** | Detecção (Zabbix, regras de log) e decisão (motor de políticas + OPA) são determinísticas. O modelo só transforma texto em fatos estruturados, com saída restrita e validada (ADR-013). |
 
 ## 2. Visão em camadas
 
@@ -30,6 +32,11 @@
 │               ├─ Tool Service (SQL RO, logs, métricas, inventário)    │
 │               ├─ External Search Gateway (anonimização + DLP)         │
 │               └─ Knowledge Writer (geração de runbooks → Git MR)      │
+├──────────────────────────────────────────────────────────────────────┤
+│ AIOPS         Event Orchestrator (fila ops.event_queue ← Zabbix/logs) │
+│               ├─ Motor de políticas + OPA (autonomia 0–3)             │
+│               ├─ Action Executor (catálogo de runbooks, isolado)      │
+│               └─ Log Processor (máscara → fingerprint → regras)       │
 ├──────────────────────────────────────────────────────────────────────┤
 │ INGESTÃO      Ingestion Worker (Git webhook → parse → classificar →   │
 │               mascarar → chunk → embed → upsert)                      │
@@ -57,10 +64,13 @@
 | **knowledge-writer** | Gera rascunho de runbook a partir do incidente resolvido e abre *merge request* | Python + API do Git | git, llm-gateway |
 | **llm-gateway** | Abstração sobre Ollama: roteamento de modelo por tarefa, limites de contexto, fila, métricas de tokens | LiteLLM ou FastAPI próprio | ollama |
 | **audit-service** | Grava eventos imutáveis (hash encadeado) e envia ao Wazuh | FastAPI + PostgreSQL | postgres-audit, wazuh |
+| **event-orchestrator** | Consome `ops.event_queue`, enriquece com ferramentas RO, pede triagem restrita ao modelo pequeno, aplica o motor de políticas e o OPA (`action_authz`), notifica ou pede aprovação (doc 13) | Python (daemon) | postgres, tool-service, llm-gateway, opa, Teams |
+| **action-executor** | Executa somente runbooks do catálogo (`ops.action_catalog`), com parâmetros validados, *dry-run*, limites, disjuntor e verificação pós-ação | Python + scripts bash versionados | alvos via Vault (`aiops_executor.vault`), postgres, audit |
+| **log-processor** | Recebe logs (Fluent Bit/Vector, Extended Events, ERRORLOG), mascara, agrupa em padrões, aplica regras; publica métricas no Zabbix e eventos na fila (doc 14) | Python | coletores, postgres, Zabbix (`zabbix_sender`), Loki, llm-gateway |
 
 ### Por que microsserviços (e não um monólito)?
 
-- **Fronteiras de confiança distintas**: o `ext-search-gateway` é o único com saída para a Internet; o `tool-service` é o único com credenciais para os bancos alvo. Isolá-los permite políticas de rede (*egress*) e de segredos específicas — princípio do menor privilégio.
+- **Fronteiras de confiança distintas**: o `ext-search-gateway` é o único com saída para a Internet; o `tool-service` é o único com credenciais de leitura para os bancos alvo; o `action-executor` é o único com credenciais de escrita, restritas ao catálogo de runbooks. Isolá-los permite políticas de rede (*egress*) e de segredos específicas — princípio do menor privilégio.
 - **Perfis de carga diferentes**: ingestão é *batch* e intensiva em GPU (embeddings); consulta é interativa e sensível a latência.
 - **Evolução independente**: trocar LlamaIndex por outra biblioteca de recuperação não afeta o agente.
 
@@ -72,12 +82,14 @@ Para o protótipo (3 servidores), os serviços rodam como contêineres Docker Co
 |----------|-------|-------------|--------------------|
 | **SRV-1 — Aplicação** | Borda, identidade, aplicação, Git | Traefik, Keycloak, web-ui, api-gateway, agent-service, retrieval-service, tool-service, ext-search-gateway, ingestion-worker, knowledge-writer, OPA (sidecar), Gitea, Vault, Prometheus, Grafana, agente Wazuh | 8–16 vCPU, 32 GB RAM, 200 GB SSD |
 | **SRV-2 — Dados** | Persistência | PostgreSQL 16 + pgvector (base `ragdb`), base `auditdb` (instância ou *cluster* separado, papéis distintos), pgBackRest, postgres_exporter | 8 vCPU, 32–64 GB RAM, 500 GB SSD NVMe |
-| **SRV-3 — Inferência** | GPU | Ollama (LLM, embeddings, reranker), llm-gateway, nvidia/dcgm-exporter | GPU ≥ 24 GB VRAM (ideal 48 GB), 16 vCPU, 64 GB RAM |
+| **SRV-3 — Inferência** | GPU | Ollama (modelo pequeno de triagem, modelo maior de interação, embeddings, reranker), llm-gateway, nvidia/dcgm-exporter | GPU ≥ 24 GB VRAM (ideal 48 GB), 16 vCPU, 64 GB RAM — dimensionamento final conforme os modelos escolhidos na avaliação (ADR-011) |
+| **LMISup/UnB** (externo à STI) | Avaliação e ajuste fino condicional | Execução do *golden set*, comparação de modelos de porte maior, ajuste fino se necessário — só com dados sintéticos/anonimizados | Cluster de GPUs do laboratório; condições de acesso a confirmar (ADR-010) |
 
 **Observações**
 - Keycloak e Vault no SRV-1 são aceitáveis para pesquisa; em produção vão para nós dedicados (ver doc 09, fase 4).
 - A base de auditoria fica no SRV-2, mas em **banco separado, com papel de escrita *append-only*** e replicação para o Wazuh — o serviço de aplicação não consegue apagar ou alterar eventos.
 - O SRV-3 **não tem rota de saída para a Internet**. Modelos são baixados uma vez por um processo controlado e verificados por *hash*.
+- A operação **não depende do LMISup**: pesos avaliados ou ajustados lá são importados pelo mesmo processo controlado e servidos no SRV-3.
 
 ## 5. Fluxo de uma consulta (resumo)
 
@@ -92,6 +104,17 @@ Para o protótipo (3 servidores), os serviços rodam como contêineres Docker Co
 9. Evento completo gravado na auditoria e enviado ao Wazuh.
 
 Detalhes nos documentos 05 (agente), 06 (segurança) e 07 (pesquisa externa).
+
+### 5.1 Fluxo de um evento (resumo)
+
+1. Trigger do Zabbix ou padrão novo/anômalo no pipeline de logs gera evento em `ops.event_queue`.
+2. `event-orchestrator` consome o evento, deduplica, enriquece com ferramentas somente leitura.
+3. Modelo pequeno devolve categoria, severidade e resumo (JSON validado contra enum).
+4. Motor de políticas + OPA definem o nível: 0 (informar), 1 (executar), 2 (pedir aprovação) ou 3 (só informar).
+5. `action-executor` executa o runbook do catálogo e verifica a condição de sucesso.
+6. Tudo registrado em `ops.action_run` e na auditoria (`aiops.*`).
+
+Detalhes nos documentos 13 (eventos e autonomia) e 14 (logs).
 
 ## 6. Escalabilidade para ambiente corporativo
 

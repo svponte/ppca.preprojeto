@@ -1,5 +1,7 @@
 # 04 — Modelo do Banco Vetorial
 
+> **Escopo do RAG (ADR-012)**: o índice vetorial cobre o conhecimento **não estruturado** — procedimentos, runbooks, políticas, documentação de arquitetura e histórico de incidentes. O **estado atual** dos ambientes (permissões, tamanhos, jobs, parâmetros vigentes, alertas) não é indexado: é obtido ao vivo pelas ferramentas do catálogo (doc 05). O inventário em `catalog` continua estruturado e consultado por SQL.
+
 ## 4.1 Por que pgvector (e não um banco vetorial dedicado)?
 
 | Critério | pgvector | Qdrant / Milvus / Weaviate |

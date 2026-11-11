@@ -1,5 +1,7 @@
 # 10 — Avaliação Experimental e Métricas
 
+> **Status do protocolo**: a abordagem (*Design Science Research*) e os critérios de avaliação — exatidão, segurança, desempenho, custo operacional e aceitação pelos analistas — estão definidos. O protocolo detalhado abaixo (tamanho e composição dos conjuntos, métricas exatas, limiares, modelos comparados e testes estatísticos) é **preliminar** e será fechado na qualificação, a partir dos requisitos levantados com a equipe.
+
 ## 10.1 Desenho geral
 
 Pesquisa de natureza **Design Science Research (DSR)**: o artefato (arquitetura + protótipo) é construído e avaliado quanto a utilidade, segurança e eficiência. Avaliação em três frentes:
@@ -9,6 +11,9 @@ Pesquisa de natureza **Design Science Research (DSR)**: o artefato (arquitetura 
 | E1 — Qualidade das respostas | Experimento offline controlado | H1 |
 | E2 — Segurança (vazamento) | Teste adversarial (*red team*) | H2, H3 |
 | E3 — Impacto operacional | Estudo de campo quase-experimental | H4 |
+| E4 — Operação orientada a eventos | Avaliação offline (eventos históricos) + implantação gradual auditada | H5 |
+
+**Ambientes**: experimentos offline com modelos de vários portes rodam no **LMISup/UnB**, apenas com dados sintéticos ou anonimizados; a operação e os estudos de campo rodam na infraestrutura da STI (ADR-010). Avaliações com dados reais ocorrem em DEV e HML antes de PROD.
 
 ## 10.2 E1 — Qualidade das respostas
 
@@ -34,7 +39,8 @@ Cada item: resposta de referência, documentos/seções relevantes, perfil de us
 | C2 | RAG híbrido (vetorial + léxico, RRF) |
 | C3 | C2 + reranker |
 | C4 | C3 + agente (intenção, ferramentas, verificação de fidelidade) |
-| C5 | C4 com modelo de embedding / LLM alternativo (2–3 variantes) |
+| C5 | C4 com modelo de embedding / LLM alternativo (variantes de família e de porte, executadas no LMISup) |
+| C6 | C4 com ajuste fino (somente se C4/C5 mostrarem lacuna — ADR-011) |
 
 **Métricas**:
 
@@ -74,7 +80,23 @@ Cada item: resposta de referência, documentos/seções relevantes, perfil de us
 - **Percepção**: SUS (usabilidade), NASA-TLX (carga cognitiva) e questionário de confiança — antes e depois; entrevistas semiestruturadas com DBAs de diferentes níveis.
 - **Ameaças à validade**: efeito aprendizado/Hawthorne, poucos incidentes graves, variação sazonal → mitigação com período longo, incidentes simulados (*game days*) e controle por categoria.
 
-## 10.5 Métricas de desempenho (operacionais)
+## 10.5 E4 — Operação orientada a eventos
+
+- **Conjunto**: eventos históricos do Zabbix e padrões de log anonimizados, com a categoria e a ação corretas **definidas pelos analistas antes** de qualquer execução do modelo; parte do conjunto fica reservada para a avaliação final.
+- **Métricas** (definição final na qualificação):
+
+| Métrica | Definição |
+|---------|-----------|
+| Acerto da triagem | Categoria do modelo × categoria dos analistas, por categoria |
+| Calibração | Relação entre a confiança declarada e o acerto real (a confiança é registrada, não usada para decidir) |
+| Ações indevidas | Execuções que os analistas não aprovariam — **meta: 0** |
+| Verificação pós-ação | % de execuções com condição de sucesso confirmada |
+| Tempo até a primeira resposta | Do evento à notificação/ação, comparado ao tempo atual da equipe |
+| Concordância de aprovação | % de solicitações de nível 2 aprovadas sem alteração (base para promoção de nível) |
+| Redução de volume nos logs | Linhas coletadas × eventos enviados ao modelo |
+| Custo operacional real | GPU, energia e horas de manutenção da equipe — registrado como "não medido" quando não houver medida, nunca como zero |
+
+## 10.6 Métricas de desempenho (operacionais)
 
 | Métrica | Meta inicial (protótipo) | Fonte |
 |---------|--------------------------|-------|
@@ -88,7 +110,7 @@ Cada item: resposta de referência, documentos/seções relevantes, perfil de us
 | Disponibilidade | ≥ 99% (horário comercial) | *probes* |
 | Usuários simultâneos suportados | ≥ 10 com P95 dentro da meta | teste de carga (Locust/k6) |
 
-## 10.6 Métricas de segurança
+## 10.7 Métricas de segurança
 
 | Métrica | Meta |
 |---------|------|
@@ -100,8 +122,10 @@ Cada item: resposta de referência, documentos/seções relevantes, perfil de us
 | Segredos detectados no repositório após CI | 0 |
 | Integridade da cadeia de auditoria | 100% verificada diariamente |
 | Cobertura de testes de política OPA | ≥ 90% das regras |
+| Execuções sem decisão de política registrada | 0 |
+| Ações de nível 3 executadas pelo executor | 0 |
 
-## 10.7 Instrumentação
+## 10.8 Instrumentação
 
 - **Langfuse** (auto-hospedado) para *traces* de LLM (prompts, *chunks*, latências, custo em *tokens*) — com mascaramento ativado.
 - **Prometheus/Grafana**: painéis "Qualidade", "Desempenho", "Segurança", "Conhecimento" (lacunas, documentos mais citados).

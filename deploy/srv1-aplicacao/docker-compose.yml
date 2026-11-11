@@ -110,6 +110,42 @@ services:
     <<: *app
     build: ../../services/knowledge-writer
 
+  # ---------------- AIOps (docs 13 e 14) ----------------
+  event-orchestrator:
+    <<: *app
+    build: ../../services/event-orchestrator
+    environment:
+      OPA_ACTION_URL: http://opa:8181/v1/data/aiops/action/decision
+      OPS_DSN_REF: aiops_orchestrator.vault
+      LLM_GATEWAY_URL: https://srv3-inferencia:8443
+      TRIAGE_MODEL_ROUTE: triagem            # modelo pequeno (ADR-011)
+      TOOL_SERVICE_URL: http://tool-service:8080
+    # recebe o webhook do Zabbix pelo Traefik (rota /aiops/events, mTLS + token)
+    networks: [edge, internal]
+
+  action-executor:
+    <<: *app
+    build: ../../services/action-executor
+    environment:
+      OPA_ACTION_URL: http://opa:8181/v1/data/aiops/action/decision
+      OPS_DSN_REF: aiops_executor.vault
+      TARGET_CREDENTIAL_REF: aiops_executor.vault   # credencial dinâmica por alvo (TTL curto)
+      RUNBOOK_SCRIPTS_DIR: /opt/runbooks             # scripts versionados, montados somente leitura
+    volumes: ["runbook-scripts:/opt/runbooks:ro"]
+    # única origem de escrita nos alvos (regra de firewall por IP deste contêiner/host);
+    # sem rota para a Internet e sem acesso ao LLM
+
+  log-processor:
+    <<: *app
+    build: ../../services/log-processor
+    environment:
+      OPS_DSN_REF: aiops_logproc.vault
+      SQLSERVER_LOGREADER_REF: aiops_logreader.vault  # leitura de XE / xp_readerrorlog
+      ZABBIX_SERVER: zabbix.dba.local:10051            # zabbix_sender (itens trapper)
+      LOKI_URL: http://loki:3100
+      LLM_GATEWAY_URL: https://srv3-inferencia:8443
+    ports: ["24224:24224"]                             # Fluent Bit dos servidores PostgreSQL (TLS)
+
   prometheus:
     image: prom/prometheus:latest
     volumes: ["./prometheus:/etc/prometheus:ro", "prom-data:/prometheus"]
@@ -131,3 +167,4 @@ volumes:
   vault-data: {}
   gitea-data: {}
   prom-data: {}
+  runbook-scripts: {}

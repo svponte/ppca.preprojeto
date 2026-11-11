@@ -77,7 +77,7 @@ flowchart TD
 | Localizar runbook | RAG com `doc_type = RUNBOOK` + busca léxica pelo termo | "Qual runbook trata deadlocks?" |
 | Diagnóstico de servidor específico | Plano multi-ferramenta: métricas do período → logs → `pg_stat_statements` / DMVs → incidentes similares → runbooks | "Por que o PG-PROD02 apresentou alto consumo de CPU?" |
 | Problema inédito (nada interno, nada histórico) | Hipóteses com base no modelo + **pedido de autorização** para pesquisa externa | "erro novo após atualização de CU" |
-| Pedido de ação de escrita | Recusar execução; gerar o script para o DBA revisar e executar | "Mate a sessão bloqueadora" |
+| Pedido de ação de escrita | O assistente não executa. Se a ação existe no catálogo de runbooks (doc 13), abre uma **solicitação de nível 2** (aprovação humana); se não existe, gera o script para o DBA revisar e executar | "Mate a sessão bloqueadora" |
 
 **Suficiência** = combinação de: maior `rerank_score`, cobertura das entidades da pergunta pela evidência, e autoavaliação do LLM ("a evidência responde à pergunta? sim/parcial/não"). Pesos calibrados no experimento.
 
@@ -121,12 +121,14 @@ Exemplos de entradas do catálogo (PostgreSQL / SQL Server):
 
 | Tarefa | Requisito | Perfil de modelo (local) |
 |--------|-----------|---------------------------|
-| Classificação de intenção, extração de entidades | Rápido, saída JSON | Modelo pequeno (3–8B) |
-| Planejamento, *tool calling*, síntese | Raciocínio, *function calling* confiável, contexto ≥ 32k | Modelo médio (20–32B, quantização Q4/Q5) |
+| Classificação de intenção, extração de entidades, **triagem de eventos** (doc 13) | Rápido, saída JSON restrita a enum | Modelo pequeno (faixa indicativa: 3–8B) |
+| Planejamento, *tool calling*, síntese | Raciocínio, *function calling* confiável, contexto ≥ 32k | Modelo maior (faixa indicativa: 20–32B, quantização Q4/Q5) |
 | Verificação de fidelidade | Comparação texto↔evidência | Modelo médio ou NLI dedicado |
 | Geração de runbook | Escrita estruturada | Modelo médio |
 
-Famílias candidatas (abertas, executáveis no Ollama): Qwen, Llama, Mistral, Gemma, gpt-oss. A escolha final é **resultado experimental** (doc 10), não premissa.
+Famílias candidatas (pesos abertos, executáveis no Ollama): Qwen, Llama, Mistral, Gemma, gpt-oss. As faixas de tamanho são indicativas: a escolha final é **resultado experimental** (doc 10), feita no LMISup com modelos de vários portes, e limitada ao que cabe na GPU da STI (ADR-010, ADR-011).
+
+**Ajuste fino (ADR-011)**: o ponto de partida é o modelo de pesos abertos sem ajuste, com prompts e ferramentas. Só se a avaliação mostrar lacuna, aplica-se ajuste fino (ex.: LoRA) restrito a vocabulário de DBA em português, estilo e formato de saída (incluindo chamadas de ferramenta), com dados sintéticos ou anonimizados. Fatos da infraestrutura nunca entram nos pesos. Verificar antes a licença do modelo base (Apache 2.0/MIT permitem derivados; outras licenças têm condições próprias).
 
 ## 5.7 Formato da resposta
 

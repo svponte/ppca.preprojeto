@@ -8,6 +8,7 @@ DDL completo e **validado em PostgreSQL 16.15 + pgvector 0.8.0** em `sql/`:
 | `sql/02_vector.sql` | ragdb | Tabela de embeddings, índice HNSW, função `kb.hybrid_search` |
 | `sql/03_rls_roles.sql` | ragdb | Papéis, contexto de sessão, políticas RLS, visão mascarada |
 | `sql/04_audit.sql` | auditdb | Auditoria append-only com cadeia de hash |
+| `sql/05_aiops.sql` | ragdb | Fila de eventos, catálogo de ações automatizáveis e execuções (doc 13) |
 
 ## 3.1 Organização por esquemas
 
@@ -15,7 +16,7 @@ DDL completo e **validado em PostgreSQL 16.15 + pgvector 0.8.0** em `sql/`:
 |---------|-----------|--------------|---------|
 | `catalog` | Inventário: servidores, parâmetros, aplicações | ingestion-worker | agente (via visão mascarada) |
 | `kb` | Documentos versionados e *chunks* | ingestion-worker | retrieval-service (sob RLS) |
-| `ops` | Incidentes, linha do tempo, propostas de runbook | agent-service, knowledge-writer | agent-service |
+| `ops` | Incidentes, linha do tempo, propostas de runbook; fila de eventos, catálogo de ações e execuções (AIOps) | agent-service, knowledge-writer, event-orchestrator, action-executor, log-processor, ingestion-worker (catálogo) | agent-service, event-orchestrator, action-executor |
 | `conv` | Conversas, mensagens, rastreabilidade (chunks citados, ferramentas, feedback) | agent-service | próprio usuário (RLS) e pesquisadores (visão anonimizada) |
 | `sec` | Dicionário de entidades sensíveis → pseudônimos | ingestion-worker | **somente** ext-search-gateway |
 | `audit` (outra base) | Eventos de segurança imutáveis | todos os serviços (INSERT) | auditor/segurança |
@@ -41,6 +42,9 @@ erDiagram
     CHUNK ||--o{ RETRIEVAL_TRACE : citado_em
     MESSAGE ||--o{ TOOL_CALL : executa
     MESSAGE ||--o| FEEDBACK : avaliada_por
+    EVENT_QUEUE ||--o{ ACTION_RUN : origina
+    ACTION_CATALOG ||--o{ ACTION_RUN : executa
+    INCIDENT |o--o{ EVENT_QUEUE : agrupa
 
     SERVER {
         bigint server_id PK
@@ -79,6 +83,26 @@ erDiagram
         text resolution
         bool assisted_by_ai
     }
+    EVENT_QUEUE {
+        bigint event_id PK
+        text source
+        text dedup_key
+        enum status
+        jsonb triage
+    }
+    ACTION_CATALOG {
+        text action_id PK
+        jsonb levels "nível por ambiente"
+        text success_check
+        char commit_sha
+    }
+    ACTION_RUN {
+        bigint run_id PK
+        smallint autonomy_level
+        enum status
+        bool verified
+        text approved_by
+    }
 ```
 
 ## 3.3 Decisões de modelagem
@@ -90,6 +114,9 @@ erDiagram
 5. **Inventário estruturado (`catalog`)** — perguntas como "Quais servidores utilizam pgBouncer?" são respondidas com SQL determinístico sobre `catalog.server_v`, não por similaridade semântica (que é imprecisa para enumerações). O agente escolhe a ferramenta (doc 05).
 6. **Rastreabilidade (`conv.retrieval_trace`, `conv.tool_call`)** — cada resposta registra quais *chunks* (e de qual commit) e quais ferramentas a sustentaram; base para métricas de fidelidade e para auditoria.
 7. **`ops.incident.assisted_by_ai`** — variável de tratamento para o estudo de MTTR (H4).
+8. **Fila de eventos em tabela (`ops.event_queue`)** — consumida com `FOR UPDATE SKIP LOCKED`; `dedup_key` + índice único parcial impedem dois eventos abertos iguais (ADR-013).
+9. **Catálogo derivado do Git (`ops.action_catalog`)** — sincronizado do bloco `automacao` dos runbooks; `commit_sha` amarra cada execução à versão revisada. Nível 3 é proibido por `CHECK` (ADR-014).
+10. **Execuções (`ops.action_run`)** — uma linha por decisão, inclusive as de nível 0; o papel do executor só pode atualizar campos de resultado. É a base da verificação pós-ação e da avaliação de H5 (ADR-015).
 
 ## 3.4 Fonte dos dados: front-matter dos documentos Markdown
 
@@ -129,3 +156,16 @@ Seções podem elevar a classificação localmente:
 | `UPDATE` em `audit.event` (até como superusuário) | bloqueado por *trigger* ✔ |
 | `audit.verify_chain` após 3 inserções | cadeia íntegra ✔ |
 | Papel `audit_writer` tenta `SELECT` | `permission denied` ✔ |
+
+**AIOps — `sql/05_aiops.sql` (2026-11-11, PostgreSQL 16 + pgvector)**
+
+| Teste | Resultado |
+|-------|-----------|
+| Mesmo `dedup_key` publicado duas vezes | 1 evento, `repeticoes = 2` ✔ |
+| Dois orquestradores chamam `ops.claim_events` ao mesmo tempo | lotes disjuntos, sem espera (`SKIP LOCKED`) ✔ |
+| Catálogo com nível 3, ação irreversível em nível 1, ação habilitada sem revisor, credencial fora do padrão `<usuario>.vault` | rejeitados por `CHECK` ✔ |
+| Execução de nível 2 sem aprovação; nível 3 executando; nível 0 com ação | rejeitados por `CHECK` ✔ |
+| Executor tenta alterar `approved_by` | `permission denied` ✔ |
+| Status `SUCESSO` sem `verified = true` | rejeitado por `CHECK` ✔ |
+| Alteração de execução finalizada; `DELETE` em `ops.action_run` | bloqueados por *trigger* ✔ |
+| `log-processor` insere direto na fila | `permission denied` (só via `ops.publish_event`) ✔ |

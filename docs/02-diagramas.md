@@ -23,13 +23,16 @@ flowchart LR
         EXT[External Search Gateway<br/>Anonimização + DLP]
         ING[Ingestion Worker]
         KW[Knowledge Writer]
+        ORQ[Event Orchestrator<br/>níveis 0–3]
+        EXE[Action Executor<br/>catálogo de runbooks]
+        LOGP[Log Processor<br/>máscara + padrões]
         GIT[(Gitea<br/>Markdown)]
         VLT[Vault]
         MON[Prometheus / Grafana<br/>Loki / Langfuse]
     end
 
     subgraph SRV2["SRV-2 — Dados"]
-        PG[(PostgreSQL 16<br/>+ pgvector<br/>ragdb)]
+        PG[(PostgreSQL 16<br/>+ pgvector<br/>ragdb + ops.event_queue)]
         AUD[(auditdb<br/>append-only)]
     end
 
@@ -45,6 +48,8 @@ flowchart LR
     end
 
     WAZ[Wazuh SIEM]
+    LMIS[LMISup/UnB<br/>avaliação — dados<br/>sintéticos/anonimizados]
+    TEAMS[Teams<br/>notificação / aprovação]
     AD[(Active Directory<br/>LDAP)]
     WEB((Internet<br/>fontes permitidas))
 
@@ -62,6 +67,18 @@ flowchart LR
     GIT -- webhook --> ING --> PG
     KW -- merge request --> GIT
     API & AG & TOOL & EXT --> AUD
+    ZBX -- webhook --> ORQ
+    TPG & TSQL -- Fluent Bit / XE --> LOGP
+    LOGP -- eventos --> PG
+    LOGP -- zabbix_sender --> ZBX
+    PG -- fila --> ORQ
+    ORQ --> TOOL
+    ORQ --> LLMGW
+    ORQ <--> TEAMS
+    ORQ -- ação autorizada --> EXE
+    EXE -- aiops_executor.vault --> TPG & TSQL
+    ORQ & EXE --> AUD
+    OLL -. pesos avaliados .- LMIS
     AUD --> WAZ
     SRV1 -. métricas .-> MON
 ```
@@ -103,6 +120,11 @@ Regras de *firewall* resumidas:
 | SRV-1 | SRV-3 | 11434 (via llm-gateway 8443) | mTLS |
 | SRV-1 (`tool-service`) | Bancos alvo | 5432 / 1433 | Somente a partir do IP do tool-service |
 | SRV-1 (`ext-search-gateway`) | Proxy de saída | 3128 | Allowlist de domínios |
+| Zabbix | SRV-1 (`event-orchestrator`) | 443 | *Webhook* de eventos |
+| SRV-1 (`action-executor`) | Bancos alvo / agentes de monitoramento | 5432 / 1433 / 10050 | Somente a partir do IP do executor; credencial `aiops_executor.vault` |
+| Servidores PostgreSQL (Fluent Bit) | SRV-1 (`log-processor`) | 24224 (TLS) | Envio de logs |
+| SRV-1 (`log-processor`) | Zabbix server | 10051 | `zabbix_sender` (itens *trapper*) |
+| Estação de *staging* | LMISup/UnB | conforme o laboratório | Somente dados sintéticos/anonimizados e pesos; nenhum acesso do LMISup à rede de produção |
 | SRV-3 | Internet | — | **Bloqueado** |
 
 ## 2.3 Fluxo de dados da ingestão

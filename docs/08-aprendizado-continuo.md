@@ -4,6 +4,8 @@
 
 "Aprender" **não** significa re-treinar o modelo. Significa **ampliar e corrigir a base de conhecimento** de forma revisada e versionada. Vantagens: auditável, reversível (Git), sem custo de GPU para *fine-tuning*, sem risco de o modelo "memorizar" dados sensíveis.
 
+O ajuste fino, quando houver (ADR-011), é separado deste ciclo: é condicional a uma lacuna medida, restrito a vocabulário, estilo e formato, feito no LMISup com dados sintéticos ou anonimizados — nunca com fatos da infraestrutura.
+
 ## 8.2 Ciclo
 
 ```mermaid
@@ -40,6 +42,7 @@ Regras:
 - Classificação herdada do incidente (mínimo CONFIDENCIAL se citar servidor específico); o *writer* produz também uma **versão generalizada** (sem servidor) como INTERNO quando a solução for reutilizável.
 - Nunca incluir senhas; credenciais referenciadas como `<usuario>.vault`.
 - Comandos destrutivos marcados com aviso e passo de confirmação.
+- Runbooks gerados por IA **nunca** recebem o bloco `automacao` (doc 13): a inclusão no catálogo de ações automatizáveis exige MR próprio, revisado por DBA sênior.
 
 ## 8.4 Deduplicação e consolidação
 
@@ -55,6 +58,8 @@ Regras:
 | Documento nunca recuperado em 6 meses | Candidato a revisão/arquivamento |
 | Divergência documentação × coleta automática (ex.: `shared_buffers` documentado ≠ real) | Alerta de *drift* de configuração + proposta de atualização do .md |
 | Pesquisa externa que resolveu um caso | Vira runbook interno (fecha a lacuna) |
+| Ação de nível 2 sempre aprovada sem divergência | Candidata a promoção de nível (doc 13 §13.8), por MR revisado |
+| Padrão de log novo recorrente (doc 14) | Proposta de runbook e de regra determinística |
 
 ## 8.6 Governança
 

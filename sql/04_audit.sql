@@ -18,7 +18,9 @@ CREATE TABLE audit.event (
     actor_sub    text        NOT NULL,     -- usuário (sub OIDC) ou conta de serviço
     actor_ip     inet,
     action       text        NOT NULL,     -- query.ask, retrieval.search, tool.sql, ext.search.request,
-                                           -- ext.search.approve, dlp.block, authz.deny, kb.ingest ...
+                                           -- ext.search.approve, dlp.block, authz.deny, kb.ingest,
+                                           -- aiops.triage, aiops.policy.decision, aiops.approval.*,
+                                           -- aiops.action.execute/verify, aiops.breaker.open ...
     resource     text,                     -- servidor, documento, ferramenta
     decision     text        NOT NULL CHECK (decision IN ('ALLOW','DENY','MASKED','BLOCKED','INFO')),
     policy_id    text,                     -- regra OPA/DLP que decidiu
