@@ -40,6 +40,8 @@ ppca.preprojeto/
 ├── README.md                         ← este arquivo
 ├── CLAUDE.md / AGENTS.md             ← instruções para Claude Code e Codex
 ├── TODO.md                           ← tarefas da seleção (Edital PPCA nº 05/2026)
+├── DEFINICOES.md                     ← decisões da candidatura (título, eixo, vaga)
+├── revisao-literatura/               ← protocolo da revisão sistemática, busca no WoS e planilha de triagem
 ├── docs/
 │   ├── 01-arquitetura.md             ← arquitetura completa e microsserviços
 │   ├── 02-diagramas.md               ← diagramas (Mermaid) de componentes e implantação

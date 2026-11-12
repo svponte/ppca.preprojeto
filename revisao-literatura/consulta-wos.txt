@@ -1,0 +1,24 @@
+(
+  ( (TI=("large language model*" OR LLM OR LLMs OR "generative AI" OR GPT OR ChatGPT) OR AB=("large language model*" OR LLM OR LLMs OR "generative AI"))
+    AND (TI=("database administrat*" OR "database management system*" OR DBMS OR "database tuning" OR "knob tuning" OR "database diagnos*" OR "database operation*" OR "database metadata" OR "data catalog*")
+         OR AB=("database administrat*" OR "database tuning" OR "knob tuning" OR "database diagnos*" OR "database operation*" OR "database metadata" OR "data catalog*")) )
+  OR
+  ( (TI=("retrieval-augmented" OR "retrieval augmented" OR RAG) OR AB=("retrieval-augmented generation" OR "retrieval augmented generation"))
+    AND TS=("large language model*" OR LLM OR LLMs)
+    AND (TI=(secur* OR privacy OR leak* OR "prompt injection" OR "access control" OR confidential* OR poison* OR attack*)
+         OR AB=("prompt injection" OR "access control" OR "data leak*" OR "privacy leak*" OR "membership inference" OR "knowledge poisoning" OR exfiltrat*)) )
+  OR
+  ( TS=("large language model*" OR LLM OR LLMs OR "generative AI")
+    AND (TI=(database* OR DBMS OR "data catalog*") OR AB=("database administrat*" OR "database management system*" OR "database infrastructure" OR "database metadata" OR "data catalog*"))
+    AND (TI=(secur* OR privacy OR "access control" OR confidential* OR "on-premise*" OR "self-hosted" OR private)
+         OR AB=("access control" OR "data leak*" OR "on-premise*" OR "on premise*" OR "self-hosted" OR "local deployment" OR "open-weight" OR "private LLM*")) )
+  OR
+  ( TI=("prompt injection" OR "LLM-integrated application*")
+    AND TS=("large language model*" OR LLM OR LLMs)
+    AND TS=(indirect OR retriev* OR "external content" OR "third-party" OR plugin* OR agent*) )
+)
+AND PY=(2022-2026)
+AND WC=("Computer Science*")
+AND DT=(Article OR Proceedings Paper OR Review)
+AND LA=(English OR Portuguese)
+NOT TS=(clinical OR medical OR patient* OR healthcare OR legal OR "question answering benchmark")
