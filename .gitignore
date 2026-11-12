@@ -11,3 +11,4 @@ __pycache__/
 # editores
 .vscode/*
 !.vscode/extensions.json
+artigos/
